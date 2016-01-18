@@ -1,0 +1,211 @@
+html, button, input, select, textarea,
+.pure-g [class *= "pure-u"] {
+  /* Set your content font stack here: */
+  font-family: 'Roboto', sans-serif;
+}
+
+body {
+  background: #FAFAFA;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+h1, h2 {
+  font-weight: 300;
+}
+
+h2 {
+  font-family: 'Roboto Condensed', sans-serif;
+}
+
+.container {
+  max-width: 960px;
+  margin: auto;
+  flex: 1;
+  width: 100%;
+}
+.content {
+ margin: 3em 0;
+}
+.content h1 {
+  font-family: 'Roboto Condensed', sans-serif;
+}
+
+.entry-title a { 
+  color: #5a5a5a;
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  font-size: 1.5em;
+}
+.entry-title a:hover {
+  color: #D44600; 
+}
+.entry-content p { 
+  color: #5e5e5e;
+  font-size: 1.2em;
+  font-weight: 300;
+  line-height: 1.8em;
+  padding: 1em 0 0 0;
+}
+
+.blog-title {
+  margin: auto;
+  text-align: center;
+}
+.blog-title a {
+  color: #000;
+  text-decoration: none; 
+  font-weight: 400;
+}
+.blog-title h1 {
+  margin-bottom: 0;
+  letter-spacing: 0.05em;
+}
+.blog-title h1 img {
+  vertical-align: middle;
+}
+.blog-title h2 {
+  margin-top: 0.1em;
+  font-size: 1em;
+}
+
+.read-more {
+  padding-bottom: 1rem;
+}
+.read-more a {
+  color: #716F58;
+  text-decoration: none;
+}
+.read-more a:hover {
+  color: #D44600; 
+}
+
+.tag a {
+  color: #B99F92;
+  text-decoration: none;
+}
+.tag a:hover {
+  color: #D44600; 
+}
+
+.posts {
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+}
+
+ul.posts li {
+  list-style: none;
+  padding: 2em 0;
+  border-bottom: 1px solid #D0D0D0;
+}
+
+/* Post lists - only title*/
+.title-list {
+  list-style-type: none;
+}
+.title-list li {
+}
+.title-list li a {
+  color: #5a5a5a;
+  text-decoration: none;
+}
+.title-list li a:hover {
+  color: #D44600; 
+}
+.title-list li.link {
+  margin-bottom: 0.5em;
+}
+
+.article {
+  padding: 3em 1.5em;
+}
+
+
+.published {
+  color: #909090 ;
+  font-size: 0.8em;
+}
+
+.tag {
+  color: #444;
+  font-size: 0.8em;
+  font-weight: 300;
+}
+
+/* Paginator*/
+.paginator { padding: 0 1.5em;}
+
+/* Code highlighting*/
+.highlighttable {
+  font-size: 0.9em;
+  padding-top: 10px;
+  width: 100%;
+}
+
+.highlight pre {
+  padding: 1em 0;
+}
+.highlight span {
+  line-height: 1.4em;
+}
+
+footer {
+  display: block;
+  background: #909090;
+  margin-top: 2em;
+}
+footer .container {
+  color: #fff;
+  font-size: 0.6em;
+  padding: 2em 0 2em 0;
+}
+footer .container a { color: #fff; }
+footer .container a:hover { color: #D44600; }
+footer .credit {
+  font-size: 0.6rem;
+}
+
+@media (max-width: 500px) {
+  .highlight pre {
+    font-size: 0.8rem;
+  }
+  
+  .blog-title h1, { text-align: center;}
+  .blog-title img, .blog-title a {
+    display: block;
+    margin: auto;
+  }
+  footer span {
+    margin-top: 2px;
+    text-align: center;
+    display: block;
+  }
+
+  .tag-posts {
+    text-align: center;
+  }
+  .title-list {
+    padding-left: 0;
+  }
+}
+@media (min-width: 500px) {
+  .blog-title { 
+    text-align: right;
+    width: 400px; 
+  }
+  .blog-title img {
+    margin-right: 0.3em;
+  }
+
+  .blog-title h2 {
+    margin-top: -20px;
+  }
+
+  footer .credit {
+    float: right;
+  }
+  .tag-posts {
+    margin-top: 6em;
+  }
+}

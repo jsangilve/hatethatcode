@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}{{ SITENAME }} - Tags{% endblock %}
+
+{% block content %}
+  <section class="content tag-posts">
+  <h1>Post tagged as {{ tag }}</h1>
+    <ul class="title-list">
+    {%- for article in articles %}
+    <li><abbr class="published">{{article.locale_date}}</abbr></li>
+    <li class="link"><a href="{{ SITEURL }}/{{ article.url }}">{{ article.title }}</a></li>
+    {% endfor %}
+    </ul>
+  </section>
+{% endblock %}
