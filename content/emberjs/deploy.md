@@ -1,8 +1,19 @@
-Title: There isn't sunshine when she's gone
+Title: Deploying Ember apps to Amazon S3
 Date:2015-01-02
-Tags: tag1, tag2
+Tags: emberjs, ember-cli-deploy, aws, s3
 Category: cat1
 Authors: José San Gil
+Status: draft
+
+
+
+Think about customizing customHash function within broccoli-asset-rev so you can generate fingerprints that could be inferred from the frontend.
+POST acerca de usar Nginx con S3 en vez de CDN cloudfront
+Check why normalizeHash is deprecated it seems like a bug with documentation
+
+
+
+
 
 
 Bacon ipsum dolor amet tongue venison corned beef, bacon doner jowl ham shank alcatra andouille turkey landjaeger. Pastrami meatloaf chuck, short loin venison fatback hamburger salami tongue. Tenderloin kevin leberkas pork chop, cow brisket hamburger jerky frankfurter spare ribs. Rump shankle fatback porchetta doner chuck ball tip shoulder biltong frankfurter venison spare ribs corned beef bacon swine. Flank strip steak leberkas t-bone sausage kielbasa.

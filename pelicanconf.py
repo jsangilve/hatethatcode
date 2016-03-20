@@ -20,6 +20,10 @@ TRANSLATION_FEED_ATOM = None
 AUTHOR_FEED_ATOM = None
 AUTHOR_FEED_RSS = None
 
+
+# Google Analytics
+GOOGLE_ANALYTICS = 'UA-11146701-2'
+
 # Blogroll
 LINKS = (('Pelican', 'http://getpelican.com/'),
          ('Python.org', 'http://python.org/'),
@@ -37,3 +41,7 @@ DEFAULT_PAGINATION = 10
 DISPLAY_PAGES_ON_MENU = False
 
 THEME = 'themes/hatethatcode'
+
+DEFAUT_METADATA = {
+    'status': 'draft'
+}
