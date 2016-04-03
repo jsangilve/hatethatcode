@@ -4,6 +4,7 @@ Tags: emberjs, ember-data, restserializer
 Category: emberjs
 Authors: José San Gil
 
+(Updated 2016-04-03: PR merged)
 
 Two weeks ago I gave a talk at [EmberJS BCN Meetup](http://www.meetup.com/Ember-js-Barcelona/) on ["How to use Ember Data with your REST API"](). It was my first talk and fortunately it didn't go bad. I wanted to explain how can you customize Ember Data to work with APIs that don't comply with [JSON API spec](http://jsonapi.org/), which is the default Response format expected by `Ember Data` since version 2.0.
 
@@ -30,7 +31,7 @@ Last week I started digging into this topic and realized that it was **deprecate
   });
 ```
 
-Then, I found this [issue](https://github.com/emberjs/data/issues/4186) in Ember Data's repo asking to solve this. I opened a [PR](https://github.com/emberjs/data/pull/4228) that fixes it (waiting for approval).
+Then, I found an [issue](https://github.com/emberjs/data/issues/4186) in Ember Data's repo asking to solve this. I opened a [PR](https://github.com/emberjs/data/pull/4228) that fixes it (already merged). Also, a deprecation warning has been added by [PR 4258](https://github.com/emberjs/data/pull/4258).
 
 ## Munging the payload
 So, what's the right way to use RESTSerializer?
