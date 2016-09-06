@@ -1,5 +1,5 @@
 Title: EmberJS - Customizing DS.RESTSerializer
-Date:2015-03-13
+Date:2016-03-13
 Tags: emberjs, ember-data, restserializer
 Category: emberjs
 Authors: José San Gil
