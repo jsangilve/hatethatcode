@@ -9,7 +9,7 @@ I think almost everybody agrees that Prettier (Javascript formatter) is a fantas
 There are a couple of Vim plugins for prettier that seem to work well. However, I like to keep Vim as light/fast as possible, so I chose [prettier-eslint-cli](https://github.com/prettier/prettier-eslint-cli) which doesn't require to install a plugin, but add a couple of lines to your Vim's config file (it also combines with [eslint rules](https://github.com/prettier/prettier-eslint)).
 
 
-So, I added the following two lines to my `.vimrc` after installing prettier-eslint-cli via yarn, and... it didn't work (because`computers...).
+So, I added the following two lines to my `.vimrc` after installing prettier-eslint-cli via yarn, and... it didn't work (because computers...).
 
 ```
  " Prettier-eslint Javascript formatter
