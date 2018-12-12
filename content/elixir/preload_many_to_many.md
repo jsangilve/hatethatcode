@@ -89,7 +89,7 @@ This resulted in the following SQL query:
  WHERE (w3."pool_id" = p0."id") ORDER BY w2."id", w1."priority" [[99, 100]]
 ```
 
-**...and it doesn't work**, because ECTO seems to INNER JOIN the many to many (`wallet_pool`) relationship twice, fetching the same pools many times. I could use `distinct` to avoid filter the repeated result, but there is still the unnecessary extra `JOIN` with `wallet_pool`.
+**...and it doesn't work**, because ECTO seems to INNER JOIN the many to many (`wallet_pool`) relationship twice, fetching the same pools many times. I could use `distinct` to filter the repeated results, but there is still the unnecessary extra `JOIN` with `wallet_pool`.
 
 I was able to write one query that did the whole thing as follows:
 
