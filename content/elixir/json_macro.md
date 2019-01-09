@@ -1,5 +1,5 @@
 Title: A macro to query over multiple fields of a JSONB column
-Date: 2019-01-01
+Date: 2019-01-08
 Tags: elixir, ecto, jsonb, postgresql
 Category: elixir
 Authors: José San Gil
@@ -33,7 +33,10 @@ If we want to get all the vehicles which brand is Mercedes-Benz and passenger ca
  def query_by_brand_capacity(brand, capacity) do
    Vehicle
    |> where([v], v.brand == ^brand)
-   |> where([v], fragment("specs @> ?::jsonb", ^%{"passenger_capacity" => capacity}))
+   |> where([v], fragment(
+     "specs @> ?::jsonb", 
+     ^%{"passenger_capacity" => capacity}
+   ))
  end
  
  # or we could also write it using the object field operator
@@ -79,14 +82,21 @@ Following the previous approach, we would define the following query:
 The ideal API would provide a function where multiple `jsonb` fields can be query and combined at the same time using `AND` / `OR` operators:
 
 ```elixir
- iex> query_specs(query, engine_type: "Electric", passenger_capacity: 5, drive_type: "Front Wheel") |> Repo.all
+ iex> query_specs(
+   query, 
+   engine_type: "Electric", passenger_capacity: 5, drive_type: "Front Wheel"
+ ) |> Repo.all
  [
    %JsonbMacroExample.Schemas.Vehicle{
      __meta__: #Ecto.Schema.Metadata<:loaded, "vehicle">,
      brand: "Mercedes-Benz",
      id: 1,
      model: "E Class",
-     specs: %{"passenger_capacity" => 5, "engine_type" => "Electric", "drive_type" => "Front Wheel"}
+     specs: %{
+       "passenger_capacity" => 5, 
+       "engine_type" => "Electric", 
+       "drive_type" => "Front Wheel"
+     }
    }
    ...
  ]
@@ -134,7 +144,10 @@ Using the macro above we're now able to write `query_specs/3`:
  @spec query_specs(Ecto.Query.t(), Keyword.t()) :: [vehicle]
  def query_specs(query, params, conjunction // :and) do
  	query
- 	|> where([_q], ^json_multi_expressions_v0(:specs, params, [conjunction: conjunction]))
+ 	|> where(
+    [_q], 
+    ^json_multi_expressions_v0(:specs, params, [conjunction: conjunction])
+  )
  end
 ```
 
@@ -190,12 +203,15 @@ Second, let's expand `build_expressions/3` to allow a custom query expression (a
 
 ```elixir
  @doc false
- @spec build_expressions(map() | Keyword.t(), atom(), atom(), fun()) :: Macro.t()
+ @spec build_expressions(map() | Keyword.t(), atom(), atom(), fun()) 
+  :: Macro.t()
  def build_expressions(params, col, conjunction, dynamic_fun \\ nil)
 
  def build_expressions(params, col, conjunction, dynamic_fun) do
    Enum.reduce(params, nil, fn {key, val}, acc ->
-     frag = JsonbMacroExample.build_fragment(col, to_string(key), val, dynamic_fun)
+     frag = JsonbMacroExample.build_fragment(
+       col, to_string(key), val, dynamic_fun
+     )
 
      JsonbMacroExample.do_combine(frag, acc, conjunction)
    end)
@@ -234,7 +250,11 @@ Let's get back to the query. We wanted vehicles which `passenger_capacity` is **
 ```elixir
  # vehicle's capacity is greater or equal than `val`
  def query_json_col(col, "passenger_capacity", val) do
-   dynamic([q], fragment("(?::jsonb ->> 'passenger_capacity')::int >= ?", field(q, ^col), ^val))
+   dynamic([q], fragment(
+     "(?::jsonb ->> 'passenger_capacity')::int >= ?", 
+     field(q, ^col), 
+     ^val)
+   )
  end
  
  # return nil for any other jsonb field
@@ -255,12 +275,15 @@ Let's get back to the query. We wanted vehicles which `passenger_capacity` is **
 
 Using pattern matching, we created a custom expression for `passenger_capacity`. This is particularly useful for `jsonb` fields that require a bit more sophisticated expressions. For example, if we have a Vehicle's spec called `heated_seats` that usually only high-end cars include, we would check for this spec in the following say:
 
-1. A vehicle has heated seats when the value of `heated_seats` is `true`: `specs @> '{"heated_seats": true}'`
-2. A vehicle doesn't have heated seats when the value is false, null or the field doesn't exist:
+- A vehicle has heated seats when the value of `heated_seats` is `true`: 
+```SQL
+ specs @> '{"heated_seats": true}'
+```
+- A vehicle doesn't have heated seats when the value is false, null or the field doesn't exist:
 ```SQL
  (specs @> '{"heated_seats": false}') OR
  (specs @> '{"heated_seats": null}') OR 
- NOT (specs ? 'heated_seats')"
+ NOT (specs ? 'heated_seats')
 ```
 
 We could write this in Elixir as follows:
@@ -285,14 +308,23 @@ We could write this in Elixir as follows:
 Without changing anything at `query_specs/3`, we can now query for vehicles which `passenger_capacity` is **greater or equal than** `x`, `engine_type` is `e_type`, `drive_type` is `d_type` and `heated_seats` are `a_boolean`.
 
 ```elixir
- iex> query_specs(query, engine_type: "Electric", passenger_capacity: 5, drive_type: "Front Wheel", heated_seats: false) |> Repo.all
+ iex> query_specs(query, %{
+   engine_type: "Electric", 
+   passenger_capacity: 5, 
+   drive_type: "Front Wheel",
+   heated_seats: false
+ }) |> Repo.all
  [
    %JsonbMacroExample.Schemas.Vehicle{
      __meta__: #Ecto.Schema.Metadata<:loaded, "vehicle">,
      brand: "Mercedes-Benz",
      id: 1,
      model: "E Class",
-     specs: %{"passenger_capacity" => 5, "engine_type" => "Electric", "drive_type" => "Front Wheel"}
+     specs: %{
+       "passenger_capacity" => 5,
+       "engine_type" => "Electric",
+       "drive_type" => "Front Wheel"
+     }
    }
    ...
  ]
@@ -304,11 +336,15 @@ Because `query_specs/3` is composable, we can do things like:
  def family_electric_mercedes do
    Vehicle
    |> where([v], v.brand == ^brand)
-   |> query_specs(%{passenger_capacity: 4, passenger_doors: 4, engine_type: "Electric"})
+   |> query_specs(%{
+     passenger_capacity: 4, 
+     passenger_doors: 4, 
+     engine_type: "Electric"
+   })
  end
 ```
 
-## The result
+## The final macro
 
 This is the final `json_multi_expressions` macro that make this work:
 
@@ -316,10 +352,10 @@ This is the final `json_multi_expressions` macro that make this work:
  @doc """
  A macro that generates multiple fragments using dynamic expressions.
 
- ## Options
+ Options
 
-   * `conjunction`: define whether to use `and` or `or` to join dynamic expressions
-   for each parameter. By default uses `and`.
+   * `conjunction`: define whether to use `and` or `or` to join dynamic 
+   expressions for each parameter. By default uses `and`.
    * `gen_dynamic` - An optional function to generate a dynamic fragment
    (using `Ecto.Query.dynamic`).
  """
@@ -340,12 +376,18 @@ This is the final `json_multi_expressions` macro that make this work:
  end
 
  @doc false
- @spec build_expressions(map() | Keyword.t(), atom(), atom(), fun()) :: Macro.t()
+ @spec build_expressions(map() | Keyword.t(), atom(), atom(), fun()) 
+   :: Macro.t()
  def build_expressions(params, col, conjunction, dynamic_fun \\ nil)
 
  def build_expressions(params, col, conjunction, dynamic_fun) do
    Enum.reduce(params, nil, fn {key, val}, acc ->
-     frag = JsonbMacroExample.build_fragment(col, to_string(key), val, dynamic_fun)
+     frag = JsonbMacroExample.build_fragment(
+       col, 
+       to_string(key), 
+       val, 
+       dynamic_fun
+     )
 
      # TODO I'd write this using a case, but it generates a compilation warning
      # https://github.com/elixir-lang/elixir/issues/6738
@@ -385,4 +427,16 @@ This is the final `json_multi_expressions` macro that make this work:
  def do_combine(frag, acc, :or), do: dynamic([q], ^acc or ^frag)
  def do_combine(frag, acc, _), do: dynamic([q], ^acc and ^frag)
 ```
+
+## Notes & References
+
+- The source code could be found in [GitHub](https://github.com/jsangilve/ecto_jsonb_macro_example)
+
+Some good related articles and PostgreSQL docs on `jsonb`:
+
+- [Querying an Embedded Map...](https://robots.thoughtbot.com/querying-embedded-maps-in-postgresql-with-ecto)
+- [Using PostgreSQL Jsonb columns in Ecto](http://www.ubazu.com/using-postgres-jsonb-columns-in-ecto)
+- [JSON Types](https://www.postgresql.org/docs/9.4/datatype-json.html)
+- [JSON Functions and Operators](https://www.postgresql.org/docs/9.4/datatype-json.html)
+
 
