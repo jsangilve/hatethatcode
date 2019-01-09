@@ -5,7 +5,7 @@ Category: elixir
 Authors: José San Gil
 
 
-When working with an `Ecto.Schema` that contains a JSONB column, you normally create a [fragment](https://hexdocs.pm/ecto/Ecto.Query.API.html#fragment/1) to query the attributes of a column.
+When working with an `Ecto.Schema` that contains a JSONB column, you normally create a [fragment](https://hexdocs.pm/ecto/Ecto.Query.API.html#fragment/1){target="_blank} to query the attributes of a column.
 
 For instance, let's assume we have the following schema:
 
@@ -430,13 +430,13 @@ This is the final `json_multi_expressions` macro that make this work:
 
 ## Notes & References
 
-- The source code could be found in [GitHub](https://github.com/jsangilve/ecto_jsonb_macro_example)
+- The source code could be found in [GitHub](https://github.com/jsangilve/ecto_jsonb_macro_example){target="_blank}
 
 Some good related articles and PostgreSQL docs on `jsonb`:
 
-- [Querying an Embedded Map...](https://robots.thoughtbot.com/querying-embedded-maps-in-postgresql-with-ecto)
-- [Using PostgreSQL Jsonb columns in Ecto](http://www.ubazu.com/using-postgres-jsonb-columns-in-ecto)
-- [JSON Types](https://www.postgresql.org/docs/9.4/datatype-json.html)
-- [JSON Functions and Operators](https://www.postgresql.org/docs/9.4/datatype-json.html)
+- [Querying an Embedded Map...](https://robots.thoughtbot.com/querying-embedded-maps-in-postgresql-with-ecto){target="_blank}
+- [Using PostgreSQL Jsonb columns in Ecto](http://www.ubazu.com/using-postgres-jsonb-columns-in-ecto){target="_blank}
+- [JSON Types](https://www.postgresql.org/docs/9.4/datatype-json.html){target="_blank}
+- [JSON Functions and Operators](https://www.postgresql.org/docs/9.4/datatype-json.html){target="_blank}
 
 
