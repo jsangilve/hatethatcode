@@ -1,7 +1,7 @@
 Title: When prettier-eslint and Vim don't work as expected
 Date:2017-07-06
 Tags: vim, javascript, prettier, eslint
-Category: django
+Category: javascript
 Authors: José San Gil
 
 I think almost everybody agrees that Prettier (Javascript formatter) is a fantastic tool and using it along with Vim is simple. 
