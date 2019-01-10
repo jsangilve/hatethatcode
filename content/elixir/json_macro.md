@@ -243,7 +243,7 @@ Second, let's expand `build_expressions/3` to allow a custom query expression (a
  end
 ```
 
-We added a new parameter to `build_expressions/4` called `dynamic_fun`. This an **optional** function that should return an Ecto's `dynamic` expression. When `dynamic_fun` is nil or returns null for a given `jsonb` field, a default expression using the `jsonb` containment operator would be placed instead.
+We added a new parameter to `build_expressions/4` called `dynamic_fun`. This is an **optional** function that must return an Ecto's `dynamic` expression. When `dynamic_fun` option is `nil` or returns `nil` for a given `jsonb` field, a default expression using the `jsonb` containment operator would be placed instead.
 
 Let's get back to the query. We wanted vehicles which `passenger_capacity` is **greater or equal than** `x`, `engine_type` is `e_type`, and `drive_type` is `d_type`. We can a create custom expression to query only those vehicles which minimum capacity is greater or equal than `x`. Let's write the expression and modify our `query_specs/3` function as follows:
 
@@ -273,7 +273,7 @@ Let's get back to the query. We wanted vehicles which `passenger_capacity` is **
  end
 ```
 
-Using pattern matching, we created a custom expression for `passenger_capacity`. This is particularly useful for `jsonb` fields that require a bit more sophisticated expressions. For example, if we have a Vehicle's spec called `heated_seats` that usually only high-end cars include, we would check for this spec in the following say:
+Using pattern matching, we created a custom expression for `passenger_capacity`. This is particularly useful for `jsonb` fields that require a bit more sophisticated expressions. For example, if we have a Vehicle's spec called `heated_seats` that usually only high-end cars include, we would check for this spec in the following way:
 
 - A vehicle has heated seats when the value of `heated_seats` is `true`: 
 ```SQL
@@ -330,7 +330,7 @@ Without changing anything at `query_specs/3`, we can now query for vehicles whic
  ]
 ```
 
-Because `query_specs/3` is composable, we can do things like:
+Similarly, because `query_specs/3` is composable, we pipe the function after other queries:
 
 ```elixir
  def family_electric_mercedes do
@@ -346,7 +346,7 @@ Because `query_specs/3` is composable, we can do things like:
 
 ## The final macro
 
-This is the final `json_multi_expressions` macro that make this work:
+We now have a general purpose macro to query `jsonb` columns as required:
 
 ```elixir
  @doc """
@@ -432,7 +432,7 @@ This is the final `json_multi_expressions` macro that make this work:
 
 - The source code could be found in [GitHub](https://github.com/jsangilve/ecto_jsonb_macro_example){target="_blank}
 
-Some good related articles and PostgreSQL docs on `jsonb`:
+Some related articles and PostgreSQL docs about `jsonb`:
 
 - [Querying an Embedded Map...](https://robots.thoughtbot.com/querying-embedded-maps-in-postgresql-with-ecto){target="_blank}
 - [Using PostgreSQL Jsonb columns in Ecto](http://www.ubazu.com/using-postgres-jsonb-columns-in-ecto){target="_blank}
