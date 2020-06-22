@@ -20,10 +20,10 @@ I tried to compile most of my learning in the following blog post:
 
 First option: Amplify JS
 
-If you're uploading the file from the browser — and specially if your application requires integration with other AWS service — Amplify is probably the easier way to go.
-Some setup using amplify-cli is required, but it's rather simple — unless you decide to setup resouces manually.
+If you're uploading the file from the browser — and particularly if your application requires integration with other AWS service — Amplify is probably a good option.
+Some setup using amplify-cli is required, but it's rather simple — unless you decide or need to setup resouces manually.
 
-You'll to install the [amplify-cli](https://docs.amplify.aws/cli/start/install#pre-requisites-for-installation), add the `storage` library and put the file in S3.
+You will need to install the [amplify-cli](https://docs.amplify.aws/cli/start/install#pre-requisites-for-installation), add the `storage` library and put the file in S3.
 
 ```
 // App.ts
@@ -39,10 +39,53 @@ async function uploadFile(filename: string, file: string ) {
 }
 ```
 
+The documentation for the `put` method looks as follows:
+
+```typescript
+/**
+ * Put a file in storage bucket specified to configure method
+ * @param {string} key - key of the object
+ * @param {Object} object - File to be put in bucket
+ * @param {Object} [config] - { level : private|protected|public, contentType: MIME Types,
+ *  progressCallback: function }
+ * @return - promise resolves to object on success
+ */
+put(key: string, object: any, config?: any): Promise<Object>;
+```
+
+At first glance, I found the options to be quite limited, but after having a look at code, I found the following configuration options:
+
+* `contentDispoistion`
+* `cache`
+* `contentType`
+* `contentDisposition`
+* `cacheControl`
+* `expires`
+* `metadata`
+* `tagging`
+* `acl`
+
+In my case, `metadata` or `tagging` were the required options. Using them is as simple as:
+
+```typescript
+const uploadFile = async (filename: string, content: string) => {
+  return AWSStorage.put(filename, content, {
+    level: 'public',
+    // metadata seems to accept an object as long as the values are string
+    metadata: {
+      language: 'en-US',
+      metatagNumber: ,
+    },
+    // with `tagging` the parameters must be URL encoded
+    tagging: new URLSearchParams({ filename }).toString(),
+  });
+};
+```
+
 
 Disadvantages: 
 
-- If you aren't using any other Amplify's library (API, AI, etc) besides storage, it's probably not the right tool for the job. You'll be adding circa X KB to your bundle just to upload a file (overkill). Also, you're forced to add the `Auth` library (Amazon Cognito).
-- The setup is simple and convenient, but restrictive. Amplify uploads your files to either `private/COGNITO-USER-ID`, `protected/COGNITO-USER_ID` or `public` path depending on the specified `level` (see the snippet above). This bucket structure certainly makes sense and suffices many use cases, but might not exactly match your requirements.
+- If you aren't using any other Amplify's library (API, AI, etc) besides storage, _it might not be the right tool for the job_. You'll be adding circa +100 KB to your bundle to upload a file (overkill). Also, you're forced to add the `Auth` library (Amazon Cognito).
+- The setup is simple and convenient, but restrictive. Amplify uploads your files to either `private/COGNITO-USER-ID`, `protected/COGNITO-USER_ID` or `public` path depending on the specified `level` (see the snippet above). This bucket structure certainly makes sense and suffices common use cases, but — as everything in software — might not exactly match your requirements.
 - If your app doesn't use AWS Cognito for authentication, some manual setup is required (IAM policies).
 
