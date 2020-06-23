@@ -83,7 +83,7 @@ const uploadFile = async (filename: string, content: string) => {
 
 ### Disadvantages: 
 
-- If you aren't using any other Amplify's library (API, AI, etc) besides storage, _it might not be the right tool for the job_. You'll be adding circa +100 KB to your bundle to upload a file (overkill). Also, you're forced to add the `Auth` library (Amazon Cognito).
+- If you do not need any other Amplify's library (API, AI, etc) besides storage, _it might not be the right tool for the job_. You'll be adding circa +100 KB to your bundle to upload a file (overkill). Also, you're forced to add the `Auth` library (Amazon Cognito).
 - The setup is simple and convenient, but restrictive. Amplify uploads your files to either `private/COGNITO-USER-ID`, `protected/COGNITO-USER_ID` or `public` path depending on the specified `level` (see the snippet above). This bucket structure certainly makes sense and suffices common use cases, but — as everything in software — might not exactly match your requirements.
 - If your app doesn't use AWS Cognito for authentication, some manual setup is required (IAM policies).
 - The extra options (metadata, tagging, etc) aren't currently documented (as of June 2020). I doubt they're considered private API but 🤷🏽‍.
@@ -94,13 +94,26 @@ const uploadFile = async (filename: string, content: string) => {
 - The library automatically creates a multi-part upload i.e., apps can upload files up to 5 TB — that'd probably be a bad idea, but still possible.
 
 
-### Second option: upload the file using the API Gateway together with a lambda function
+### Second option: upload the file using the API Gateway and a lambda function
 
 In my opinion, this is the most flexible way to upload and process — or trigger the procesing — of files, as long as your application doesn't require to upload files over 10 MB. 
 
 The web application would `POST` the file to a given HTTP endpoint as binary data. 
 
-There a different examples on how to do it out there, but please find below a very simple setup using the [Serverless framework](https://www.serverless.com/):
+There arre different examples on how to do it out there, but please find below a very simple setup using the [Serverless framework](https://www.serverless.com/):
+
+```yaml
+# TODO provide example of serverless configuration
+```
+
+This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](). 
+
+The endpoint handles the request, and the payload (the file) gets automatically transformed into a base64 string by the lambda proxy integration (extra configuration is required when using the regular lambda integration).
+
+We need to configure the API Gateway to accept a binary media types i.e., a binary `Content-Type` that should be accepted by the endpoint. Let's use  `multipart/formdata` for this example.
+
+The lambda function would look like this:
+
 
 
 ### Disadvantages
@@ -122,3 +135,7 @@ This option requires a pair of lambda functions: one to generate pre-signed URLs
 ### Advantages
 
 # Fourth option: upload the file using pre-signed POST and the API Gateway
+
+### References
+
+- CSS Tricks example
