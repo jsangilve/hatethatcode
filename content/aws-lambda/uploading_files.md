@@ -12,7 +12,7 @@ If the file size is over th 10MB limit, you need two requests ( pre-signed url o
 
 Uploading a file is one of those common features (use cases) that almost every web applications needs. From adding a profile picture to importing a CSV is a fairly simple task to do in almost every web framework or library.
 
-I'm working on a side project where uploading and processing files is an essential use case. I'm building the project using a serverless approach, and assumed it would be a simple task to upload a file to S3 from the browser. In fact, it isn't complicated, but I actually found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using and AWS lambdas, but there are a few subtleties that you might want to consider first.
+I'm working on a side project where uploading and processing files is an essential use case. I decided to go for a serverless approach, and assumed it would be a simple task to upload a file to S3 from the browser. In fact, it isn't complicated, but I actually found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using and AWS lambdas, but there are a few subtleties that you might want to consider first.
 
 I tried to compile most of my learning in the following blog post:
 
@@ -100,25 +100,72 @@ In my opinion, this is the most flexible way to upload and process — or trigge
 
 The web application would `POST` the file to a given HTTP endpoint as binary data. 
 
-There arre different examples on how to do it out there, but please find below a very simple setup using the [Serverless framework](https://www.serverless.com/):
+There are different examples on how to do it out there, but please find below a very simple setup using the [Serverless framework](https://www.serverless.com/):
 
 ```yaml
+# serverless.yaml
 # TODO provide example of serverless configuration
 ```
 
 This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](). 
 
-The endpoint handles the request, and the payload (the file) gets automatically transformed into a base64 string by the lambda proxy integration (extra configuration is required when using the regular lambda integration).
+The endpoint handles the request, and the payload (the file) gets automatically transformed into a string by the lambda proxy integration (extra configuration is required when using the regular lambda integration). 
 
-We need to configure the API Gateway to accept a binary media types i.e., a binary `Content-Type` that should be accepted by the endpoint. Let's use  `multipart/formdata` for this example.
+We need to configure the API Gateway to accept binary media types i.e., a binary `Content-Type` that should be accepted by the endpoint. 
+
+Please note that `s3:PutObject` and `s3:PutObjectTagging` permissions are required to upload the file and put tags, respectively.
+
+The API Gateway — through the lambda proxy integration — transforms the payload into a `base64` string, when the `Content-Type` header matches the API's binary media types. Otherwise, the proxy integration pass down the payload as string.
+
+For example, let's use `multipart/form-data`. The API's binary media types has been configured to accept `multipart/form-data` (see `serverless.yaml` above).
 
 The lambda function would look like this:
 
+```typescript
+const uploadFile: APIGatewayProxyHandler = async (event) => {
+  const { file, fields } = await parseFormData(event);
+  const tags = { filename: file.filename };
+  try {
+    await s3Client
+      .putObject({
+        Bucket: BUCKET_NAME,
+        Key: fields.filename || file.filename,
+        Body: file.content,
+        Tagging: queryString.encode(tags),
+      })
+      .promise();
 
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ description: 'file created', result: 'ok' }),
+    };
+
+  } catch (_error) {
+    // this is not ideal error handling, but good enough for the purpose of this example
+    return {
+      statusCode: 409, body: JSON.stringify({ description: 'something went wrong', result: 'error' })
+    }
+  }
+};
+
+```
+
+This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the repository or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file and extract other fields from the form data. Then, the file gets uploaded to S3, adding tags, and a customized filename when provided.
+
+You can call the function using the following `curl` request:
+
+```bash
+curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=@FILE_TO_UPLOAD.mp3' -F 'filename=my_custom_filename.m4a' https://your-api-url-id.execute-api.us-east-1.amazonaws.com/dev/upload
+```
 
 ### Disadvantages
 
-- API Gateway limits the payload size to [10 MB](https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html1)
+- API Gateway limits the payload size to [10 MB](https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html1). If you try to upload a file that exceeds the 10 MB limit, the API Gateway return HTTP 413: `HTTP content length exceeded 10485760 bytes`.
+
+### Advantages
+
+- Relatively easy to setu.
+- 
 
 ### Third option: upload the file using a pre-signed URL and the API Gateway
 
