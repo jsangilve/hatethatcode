@@ -94,26 +94,22 @@ const uploadFile = async (filename: string, content: string) => {
 - The library automatically creates a multi-part upload i.e., apps can upload files up to 5 TB — that'd probably be a bad idea, but still possible.
 
 
-### Second option: upload the file using the API Gateway and a lambda function
+## Second option: upload the file using the API Gateway and a lambda function
 
-In my opinion, this is the most flexible way to upload and process — or trigger the procesing — of files, as long as your application doesn't require to upload files over 10 MB. 
+In my opinion, this is the simplest and most flexible way to upload and process — or trigger the procesing — files using AWS... as long as your application doesn't require to upload files over 10 MB. 
 
-The web application would `POST` the file to a given HTTP endpoint as binary data. 
-
-There are different examples on how to do it out there, but please find below a very simple setup using the [Serverless framework](https://www.serverless.com/):
+The web application would `POST` the file to a given HTTP endpoint as binary data. You can find different example on how to do it out there, but please find below a simple setup using the [Serverless framework](https://www.serverless.com/):
 
 ```yaml
 # serverless.yaml
 # TODO provide example of serverless configuration
 ```
 
-This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](). 
+This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](). It adds a policy attaching the S3 permissions required to upload a file. Please note that `s3:PutObject` and `s3:PutObjectTagging` are required to upload the file and put tags, respectively.
 
-The endpoint handles the request, and the payload (the file) gets automatically transformed into a string by the lambda proxy integration (extra configuration is required when using the regular lambda integration). 
+The defined endpoint (`POST /upload`) handles the request and transforms the payload (the file) into a string, through the lambda proxy integration (extra configuration is required when using the regular lambda integration), before passing it to the lambda function. 
 
-We need to configure the API Gateway to accept binary media types i.e., a binary `Content-Type` that should be accepted by the endpoint. 
-
-Please note that `s3:PutObject` and `s3:PutObjectTagging` permissions are required to upload the file and put tags, respectively.
+We need to configure the API Gateway to accept binary media types i.e., the binary content types that should be accepted by the API.
 
 The API Gateway — through the lambda proxy integration — transforms the payload into a `base64` string, when the `Content-Type` header matches the API's binary media types. Otherwise, the proxy integration pass down the payload as string.
 
@@ -122,6 +118,7 @@ For example, let's use `multipart/form-data`. The API's binary media types has b
 The lambda function would look like this:
 
 ```typescript
+// uploadFile.ts
 const uploadFile: APIGatewayProxyHandler = async (event) => {
   const { file, fields } = await parseFormData(event);
   const tags = { filename: file.filename };
@@ -150,7 +147,7 @@ const uploadFile: APIGatewayProxyHandler = async (event) => {
 
 ```
 
-This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the repository or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file and extract other fields from the form data. Then, the file gets uploaded to S3, adding tags, and a customized filename when provided.
+This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the repository or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file and extract other fields from the form data. Then, uploads the file to S3, includes the tags, and a customizes the filename when provided.
 
 You can call the function using the following `curl` request:
 
@@ -160,16 +157,20 @@ curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=
 
 ### Disadvantages
 
-- API Gateway limits the payload size to [10 MB](https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html1). If you try to upload a file that exceeds the 10 MB limit, the API Gateway return HTTP 413: `HTTP content length exceeded 10485760 bytes`.
+- API Gateway limits the payload size to [10 MB](https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html1). If you try to upload a file that exceeds the 10 MB limit, the API Gateway return HTTP 413: `HTTP content length exceeded 10485760 bytes`. 
 
 ### Advantages
 
-- Relatively easy to setu.
-- 
+- Relatively easy to setup
+- A synchronous flow for uploading and processing files. When the file size doesn't surpass the API Gateway's limit and the required processing can be done quickly, this model is simple to use and integrate with any web application. 
+- Authorization can be added using the API Gateway's authorizers.
 
-### Third option: upload the file using a pre-signed URL and the API Gateway
+## Third option: upload the file using a pre-signed URL and the API Gateway
 
 This option employs the AWS's API Gateway and two different lambda functions:
+
+1. A function that creates a pre-signed URL i.e, a URL to upload the file using an `HTTP PUT` request.
+2. A function that processes
 
 The API Gateway is required for the pre-signed URLs
 
@@ -179,9 +180,16 @@ This option requires a pair of lambda functions: one to generate pre-signed URLs
 
 ### Disadvantages
 
+- Tagging doesn't work out of the box. Even when the pre-signed URL is created passing the tags, the uploaded file doesn't get tagged. As mentioned above, this is a reported [issue](https://github.com/aws/aws-sdk-js/issues/1313) and, according to the [SDK documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property), it doesn't work because some parameters — like `Tagging` — must be provided as headers instead. 
+- The application flow might vary, but uploading a file always requires two requests: one to get the pre-signed url, another to upload the file.
+
 ### Advantages
 
+- You can upload file up to 5 GB.
+
 # Fourth option: upload the file using pre-signed POST and the API Gateway
+
+The main reason to use POST Signed url is the lebel 
 
 ### References
 
