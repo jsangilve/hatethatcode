@@ -165,18 +165,46 @@ curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=
 - A synchronous flow for uploading and processing files. When the file size doesn't surpass the API Gateway's limit and the required processing can be done quickly, this model is simple to use and integrate with any web application. 
 - Authorization can be added using the API Gateway's authorizers.
 
-## Third option: upload the file using a pre-signed URL and the API Gateway
+## Third option: upload the file using a pre-signed URL
 
-This option employs the AWS's API Gateway and two different lambda functions:
+This option employs an API Gateway's endpoint integrated with a lambda function. The application client requests a pre-signed URL from the endpoint, passing some parameters as metadata and tags (there are some caveats with this one), and uploads the file sending an `HTTP PUT` request to the pre-signed URL. 
 
-1. A function that creates a pre-signed URL i.e, a URL to upload the file using an `HTTP PUT` request.
-2. A function that processes
+Let's see an example on how to this with the `serverless` framework:
 
-The API Gateway is required for the pre-signed URLs
+```
+# serverless.yaml
+Functions:
+  # ... other functions
+  getUploadURL:
+    handler: build.getUploadURL
+    events: 
+      - http: 
+          method: get
+          path: getUploadURL
+          cors: true
+```
 
-If you're using a pre-signed URL and the API gatewa, t
+Note: it might make more sense to use an HTTP `POST` instead of `GET` given that we're actually _creating_ the URL, but I considered a `GET` request good enough for the purpose of this example.
 
-This option requires a pair of lambda functions: one to generate pre-signed URLs localhost
+The snippet above creates the endpoint in the API Gateway together with a new lambda function called `getUploadUrl`.  Before deploying these changes, we'll need define the function:
+
+```typescript
+```
+
+The lambda function encodes the URL parameters and passes it to the aws-sdk to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as Tagging. This is explicitly stated in the SDK documentation [documentation](https://github.com/aws/aws-sdk-js/issues/1313). Unfortunately, the typescript definitions for `getSignedUrlPromise` has the params defined as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>;`), so you might easily miss this detail. 
+
+Note: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
+
+Therefore, if your application doesn't require Tagging — or any other unsupported parameter like SSECustomerKey, ACL, Expires, or ContentLength — then using a pre-signed url is a good option. If your application does require `Tagging`, a pre-signed url might not be the best solution, but there is still a work-around: the client application can provide the tags using the AWS header. Before debating about the developer experienece of the resulting API, let's see a `curl` request example:
+
+# TODO check whether pre-signed url accepts the metadata parameters
+
+```bash
+# TODO add curl request example
+```
+
+Considering I needed tagging and/or metadata, I decided to avoid this solution.
+
 
 ### Disadvantages
 
@@ -185,11 +213,18 @@ This option requires a pair of lambda functions: one to generate pre-signed URLs
 
 ### Advantages
 
-- You can upload file up to 5 GB.
+- The file size can be up to 5 GB.
 
-# Fourth option: upload the file using pre-signed POST and the API Gateway
+## Fourth option: upload the file using pre-signed POST and the API Gateway
 
 The main reason to use POST Signed url is the lebel 
+
+### Advantages
+
+- The file size can be up to 5 GB
+- It's the recommended method to upload a file from a web-form.
+
+### Disadvatages
 
 ### References
 
