@@ -152,7 +152,7 @@ This lambda function parses the APIGatewayProxy event (see the `parseFormData` f
 You can call the function using the following `curl` request:
 
 ```bash
-curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=@FILE_TO_UPLOAD.mp3' -F 'filename=my_custom_filename.m4a' https://your-api-url-id.execute-api.us-east-1.amazonaws.com/dev/upload
+curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=@FILE_TO_UPLOAD.mp3' -F 'filename=my_custom_filename.m4a' https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/upload
 ```
 
 ### Disadvantages
@@ -184,36 +184,84 @@ Functions:
           cors: true
 ```
 
-Note: it might make more sense to use an HTTP `POST` instead of `GET` given that we're actually _creating_ the URL, but I considered a `GET` request good enough for the purpose of this example.
-
-The snippet above creates the endpoint in the API Gateway together with a new lambda function called `getUploadUrl`.  Before deploying these changes, we'll need define the function:
+The snippet above creates the endpoint in the API Gateway together with a new lambda function called `createUploadURL`.  Before deploying these changes, we'll need define the function:
 
 ```typescript
+// createUploadUrl.ts
+export const createUploadUrl: APIGatewayProxyHandler = async (event) => {
+  const { fields } = await parseFormData(event);
+  const tags = fields.filename ? { filename: fields.filename }: undefined;
+  const expirationInSeconds = 30;
+  // presigned url for put operation
+  // TODO proper error handling
+  const url = await s3Client.getSignedUrlPromise('putObject', {
+    // Use the filename provided in the form. Otherwise fallback to the original filename
+    Key: fields.filename,
+    Bucket: BUCKET_NAME,
+    Metadata: tags ? tags : undefined,
+    Tagging: tags ? queryString.encode(tags) : undefined,
+    Expires: expirationInSeconds,
+  });
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      url,
+    }),
+  };
+};
+
 ```
 
-The lambda function encodes the URL parameters and passes it to the aws-sdk to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as Tagging. This is explicitly stated in the SDK documentation [documentation](https://github.com/aws/aws-sdk-js/issues/1313). Unfortunately, the typescript definitions for `getSignedUrlPromise` has the params defined as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>;`), so you might easily miss this detail. 
+The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as Tagging. This is explicitly stated in the javascript SDK's documentation [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` have the params defined as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>;`), so you might easily miss this detail. 
 
-Note: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
+- _Note 1_: Even when the documentation lists `Expires` among the parameters that will be ignored, it works. The generated URL (signature), expires after the given number of seconds (30 seconds in the example above).
 
-Therefore, if your application doesn't require Tagging — or any other unsupported parameter like SSECustomerKey, ACL, Expires, or ContentLength — then using a pre-signed url is a good option. If your application does require `Tagging`, a pre-signed url might not be the best solution, but there is still a work-around: the client application can provide the tags using the AWS header. Before debating about the developer experienece of the resulting API, let's see a `curl` request example:
+- _Note 2_: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
 
-# TODO check whether pre-signed url accepts the metadata parameters
+Therefore, if your application doesn't require Tagging — or any other unsupported parameter like SSECustomerKey, ACL, or ContentLength —  using a pre-signed url is a good option. 
 
 ```bash
-# TODO add curl request example
+curl -vs --progress-bar -X POST -F 'filename=fileWithPresignedURL' https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/createUploadUrl
 ```
 
-Considering I needed tagging and/or metadata, I decided to avoid this solution.
+The request above will return a JSON with the following format:
 
+```json
+{
+  "url": "THE_PRESIGNED_URL"
+}
+```
+
+Then, we can use another `curl` command to upload a file:
+
+```bash
+curl -vs --progress-bar -X PUT --upload-file myFile.m4a $THE_PRESIGNED_URL
+```
+
+If your application does require `Tagging`, a pre-signed url might not be the best solution, but there is still a work-around: the client application can provide the tags using the `x-amz-tagging` HTTP header. Before debating about the developer experience of the resulting API, let's see a `curl` request example:
+
+```bash
+curl -vs --progress-bar -X PUT \
+-H "x-amz-tagging: filename=fileUploadedWithPresignedURL" \
+--upload-file myFile.m4a $THE_PRESIGNED_URL
+```
+
+You might have noticed how the lambda function is also passing the tags to the `Metadata` attribute. Contrary to the `Tagging` parameter, this works out of the box. The uploaded file gets the metadata attributes. No need for encoding.
+
+- _Note_: if you wonder whether to use metadata or tags, there is an [interesting answer](https://stackoverflow.com/questions/42126348/difference-between-object-tags-and-object-metadata) in SO on the topic.
+
+If you need `Tagging` (or any of the ignored parameters), I think this approach is far from ideal. The client application not only needs to send two requests to upload the file, but it also must provide the url encode tags as an HTTP header.
 
 ### Disadvantages
 
-- Tagging doesn't work out of the box. Even when the pre-signed URL is created passing the tags, the uploaded file doesn't get tagged. As mentioned above, this is a reported [issue](https://github.com/aws/aws-sdk-js/issues/1313) and, according to the [SDK documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property), it doesn't work because some parameters — like `Tagging` — must be provided as headers instead. 
+- Tagging doesn't work out of the box. Even when the pre-signed URL is created passing the tags, the uploaded file doesn't get tagged. This [issue](https://github.com/aws/aws-sdk-js/issues/1313) has been reported and, according to the [SDK documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property), it doesn't work because some parameters — like `Tagging` — aren't supported and must be provided as headers.
 - The application flow might vary, but uploading a file always requires two requests: one to get the pre-signed url, another to upload the file.
 
 ### Advantages
 
 - The file size can be up to 5 GB.
+- The URL expiration feature might be helpful on some specific use cases e.g., a user must be able to upooad upload a file without signing in.
 
 ## Fourth option: upload the file using pre-signed POST and the API Gateway
 
