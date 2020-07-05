@@ -175,12 +175,12 @@ Let's see an example on how to this with the `serverless` framework:
 # serverless.yaml
 Functions:
   # ... other functions
-  getUploadURL:
-    handler: build.getUploadURL
+  createUploadURL:
+    handler: build.createUploadURL
     events: 
       - http: 
-          method: get
-          path: getUploadURL
+          method: post
+          path: createUploadURL
           cors: true
 ```
 
@@ -213,13 +213,13 @@ export const createUploadUrl: APIGatewayProxyHandler = async (event) => {
 
 ```
 
-The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as Tagging. This is explicitly stated in the javascript SDK's documentation [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` have the params defined as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>;`), so you might easily miss this detail. 
+The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as `Tagging`. This is explicitly stated in the javascript SDK's documentation [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` define that function parameters as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>`), so you might easily miss this detail. 
 
 - _Note 1_: Even when the documentation lists `Expires` among the parameters that will be ignored, it works. The generated URL (signature), expires after the given number of seconds (30 seconds in the example above).
 
 - _Note 2_: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
 
-Therefore, if your application doesn't require Tagging — or any other unsupported parameter like SSECustomerKey, ACL, or ContentLength —  using a pre-signed url is a good option. 
+Therefore, if your application doesn't require Tagging — or any other unsupported parameter like SSECustomerKey, ACL, or ContentLength —  using a pre-signed url is a good option. Let's see how it looks:
 
 ```bash
 curl -vs --progress-bar -X POST -F 'filename=fileWithPresignedURL' https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/createUploadUrl
@@ -239,40 +239,78 @@ Then, we can use another `curl` command to upload a file:
 curl -vs --progress-bar -X PUT --upload-file myFile.m4a $THE_PRESIGNED_URL
 ```
 
-If your application does require `Tagging`, a pre-signed url might not be the best solution, but there is still a work-around: the client application can provide the tags using the `x-amz-tagging` HTTP header. Before debating about the developer experience of the resulting API, let's see a `curl` request example:
+If your application does require `Tagging`, a pre-signed url might not be the best solution, but there is still a work-around: the client application can provide the tags using the `x-amz-tagging` HTTP header. Before debating about the developer experience of the resulting API, let's see a request example:
 
 ```bash
-curl -vs --progress-bar -X PUT \
--H "x-amz-tagging: filename=fileUploadedWithPresignedURL" \
+curl -X PUT -H "x-amz-tagging: filename=fileUploadedWithPresignedURL" \
 --upload-file myFile.m4a $THE_PRESIGNED_URL
 ```
 
-You might have noticed how the lambda function is also passing the tags to the `Metadata` attribute. Contrary to the `Tagging` parameter, this works out of the box. The uploaded file gets the metadata attributes. No need for encoding.
+In my opinion, this approach is not ideal. The client application not only needs to send two requests to upload the file, but it also must provide the url encoded tags — and/or other parameters — as an HTTP header. Too many implementation leaks.
 
-- _Note_: if you wonder whether to use metadata or tags, there is an [interesting answer](https://stackoverflow.com/questions/42126348/difference-between-object-tags-and-object-metadata) in SO on the topic.
+You might have noticed how the lambda function is also passing the tags to the `Metadata` attribute. Contrary to the `Tagging` parameter, this works out of the box — the uploaded file gets the metadata attributes. No need for encoding.
 
-If you need `Tagging` (or any of the ignored parameters), I think this approach is far from ideal. The client application not only needs to send two requests to upload the file, but it also must provide the url encode tags as an HTTP header.
+- _Note_: if you wonder whether to use metadata or tags, there is an [interesting answer](https://stackoverflow.com/questions/42126348/difference-between-object-tags-and-object-metadata) answer in SO on the topic.
+
 
 ### Disadvantages
 
-- Tagging doesn't work out of the box. Even when the pre-signed URL is created passing the tags, the uploaded file doesn't get tagged. This [issue](https://github.com/aws/aws-sdk-js/issues/1313) has been reported and, according to the [SDK documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property), it doesn't work because some parameters — like `Tagging` — aren't supported and must be provided as headers.
 - The application flow might vary, but uploading a file always requires two requests: one to get the pre-signed url, another to upload the file.
+- Tagging doesn't work out of the box. Even when the pre-signed URL is created passing the tags, the uploaded file doesn't get tagged. This [issue](https://github.com/aws/aws-sdk-js/issues/1313) has been reported and, according to the [SDK documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property), it doesn't work because some parameters — like `Tagging` — aren't supported and must be provided as headers.
 
 ### Advantages
 
 - The file size can be up to 5 GB.
-- The URL expiration feature might be helpful on some specific use cases e.g., a user must be able to upooad upload a file without signing in.
+- The URL expiration feature might be helpful on some specific use cases e.g. a user must be able to upload a file without signing in.
+- When uploading big files, the server load — or serveless load 😅 — gets transferred to S3. In a traditional web server approach, your server wouldn't be busy handling the files. Meanwhile, in a serverless approach, your lambda functions wouldn't need to be executed to handle the file upload, which, theoretically, translates into a smaller bill — [S3 doesn't charge for data transfer IN](https://aws.amazon.com/s3/pricing/).
+- It can be [combined](https://github.com/prestonlimlianjie/aws-s3-multipart-presigned-upload) with multipart uploads. The maximum file (object) size can be up to 5 TB.
 
-## Fourth option: upload the file using pre-signed POST and the API Gateway
+## Fourth option: upload the file using pre-signed POST
 
-The main reason to use POST Signed url is the lebel 
+This option is very similar to a pre-signed URLs, but allows the client application to upload a file using an HTTP POST request. From the S3 documentation:
+
+ Amazon S3 supports HTTP POST requests so that users can upload content directly to Amazon S3. By using POST, end users can authenticate requests without having to pass data through a secure intermediary node that protects your credentials. Thus, HTTP POST has the potential to reduce latency. 
+
+I decided to try this option because of the issue with `Tagging` and pre-signed URLs. The pre-signed POST supports the parameters expected by the `PutObject` operation. Let's see how it works:
+
+First, let's add a new function to the `serverless.yaml` file:
+
+```yaml
+# serverless.yaml
+Functions:
+  # ... other functions
+  createPostUpload:
+    handler: build.createPostUpload
+    events: 
+      - http: 
+          method: post
+          path: createPostUpload
+          cors: true
+```
+
+Nothing new here. The function looks quite similar to the pre-signed URL option. The next step is to create the lambda function:
+
+```typescript
+```
+
+We use the SDK's function `createPresignedPost`. 
+
+The API requires to define fields and condition that should be authorized as part of the requests. This can goes as specific as preventing the client to define some specific tags
+
+
+
+### Disadvatages
+
+- The client application must send two requests: a request to get the pre-signed data (JSON object), and a request to POST the file to S3.
+- It might be unfair to call the process complicated, but it
+-
 
 ### Advantages
 
-- The file size can be up to 5 GB
+- Same advantages that pre-signed URLs
 - It's the recommended method to upload a file from a web-form.
+- It's probably the most flexible approach. Conditions can be specified on the pre-signed filds to make sure the upload file contains exactly what's expected.
 
-### Disadvatages
 
 ### References
 
