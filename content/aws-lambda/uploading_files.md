@@ -102,10 +102,18 @@ The web application would `POST` the file to a given HTTP endpoint as binary dat
 
 ```yaml
 # serverless.yaml
-# TODO provide example of serverless configuration
+functions:
+  # option 1: sync upload
+  uploadFile:
+    handler: build.uploadFile
+    events:
+      - http:
+          method: post
+          path: upload
+          cors: true
 ```
 
-This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](). It adds a policy attaching the S3 permissions required to upload a file. Please note that `s3:PutObject` and `s3:PutObjectTagging` are required to upload the file and put tags, respectively.
+This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html). It adds a policy attaching the S3 permissions required to upload a file. Please note that `s3:PutObject` and `s3:PutObjectTagging` are required to upload the file and put tags, respectively.
 
 The defined endpoint (`POST /upload`) handles the request and transforms the payload (the file) into a string, through the lambda proxy integration (extra configuration is required when using the regular lambda integration), before passing it to the lambda function. 
 
@@ -189,18 +197,15 @@ The snippet above creates the endpoint in the API Gateway together with a new la
 ```typescript
 // createUploadUrl.ts
 export const createUploadUrl: APIGatewayProxyHandler = async (event) => {
-  const { fields } = await parseFormData(event);
-  const tags = fields.filename ? { filename: fields.filename }: undefined;
-  const expirationInSeconds = 30;
-  // presigned url for put operation
-  // TODO proper error handling
+  // expects body to be a JSON containing the required parameters
+  const body = JSON.parse(event.body || '');
+  const { filename, tags } = getUploadParameters(body);
   const url = await s3Client.getSignedUrlPromise('putObject', {
-    // Use the filename provided in the form. Otherwise fallback to the original filename
-    Key: fields.filename,
+    Key: filename,
     Bucket: BUCKET_NAME,
-    Metadata: tags ? tags : undefined,
-    Tagging: tags ? queryString.encode(tags) : undefined,
-    Expires: expirationInSeconds,
+    Metadata: tags,
+    Tagging: tags ? queryString.encode(body.tags) : undefined,
+    Expires: 90,
   });
 
   return {
@@ -215,7 +220,7 @@ export const createUploadUrl: APIGatewayProxyHandler = async (event) => {
 
 The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as `Tagging`. This is explicitly stated in the javascript SDK's documentation [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` define that function parameters as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>`), so you might easily miss this detail. 
 
-- _Note 1_: Even when the documentation lists `Expires` among the parameters that will be ignored, it works. The generated URL (signature), expires after the given number of seconds (30 seconds in the example above).
+- _Note 1_: Even when the documentation lists `Expires` among the parameters that will be ignored, it works. The generated URL (signature), expires after the given number of seconds (90 seconds in the example above).
 
 - _Note 2_: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
 
@@ -250,7 +255,7 @@ In my opinion, this approach is not ideal. The client application not only needs
 
 You might have noticed how the lambda function is also passing the tags to the `Metadata` attribute. Contrary to the `Tagging` parameter, this works out of the box — the uploaded file gets the metadata attributes. No need for encoding.
 
-- _Note_: if you wonder whether to use metadata or tags, there is an [interesting answer](https://stackoverflow.com/questions/42126348/difference-between-object-tags-and-object-metadata) answer in SO on the topic.
+- _Note_: if you wonder whether to use metadata or tags, there is an [interesting answer](https://stackoverflow.com/questions/42126348/difference-between-object-tags-and-object-metadata) in SO on the topic.
 
 
 ### Disadvantages
@@ -288,28 +293,141 @@ Functions:
           cors: true
 ```
 
-Nothing new here. The function looks quite similar to the pre-signed URL option. The next step is to create the lambda function:
+Nothing new here. The function definition looks quite similar to the pre-signed URL option. The next step is to create the lambda function: 
 
 ```typescript
+// createPostUploadURL.ts
+export const createPostUploadUrl: APIGatewayProxyHandler = async (event) => {
+    // expects body to be a JSON containing the required parameters
+    const body = JSON.parse(event.body || '');
+    const { filename, tags } = getUploadParameters(body);
+
+    // missing proper error handling
+    const postObj = s3Client.createPresignedPost({
+      Bucket: BUCKET_NAME,
+      Expires: 90, // expiration in seconds
+      // matches any value for tagging
+      Conditions: tags && [['starts-with', '$tagging', '']],
+      Fields: {
+        key: filename,
+      },
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        url: postObj.url,
+        fields: {
+          ...postObj.fields,
+          // augment post object with the tagging values
+          tagging: tags ? buildXMLTagSet(tags) : undefined,
+        },
+      }),
+    };
+};
+
 ```
 
 We use the SDK's function `createPresignedPost`. 
 
-The API requires to define fields and condition that should be authorized as part of the requests. This can goes as specific as preventing the client to define some specific tags
+The API requires to define fields and conditions that could be part of the request. The `Conditions` key defines an array of policy conditions that should be met to upload the file. You can find a specific section about conditions in the [AWS S3 documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-ConditionMatching).
 
+In the example above, when tags are provided, the resulting policy expects a `tagging` field with any value. However, the S3's `PostObject` operation still requires this `tagging` field to contain the set of tags in the following format:
+
+```xml
+# xml format for the tagging set
+<Tagging>
+  <TagSet>
+    <Tag>
+      <Key>Tag Name</Key>
+      <Value>Tag Value</Value>
+    </Tag>
+    ...
+  </TagSet>
+</Tagging>
+```
+
+I added a simple `buildXMLTagSet` function for this purpose:
+
+```typescript
+/**
+ * Given a set of tags, produces the expected XML tagging set format (as string)
+ */
+export const buildXMLTagSet = (tagset: Record<string, string>): string => {
+  const tags = Object.entries(tagset).reduce(
+    (acc, [key, value]) => `${acc}<Tag><Key>${key}</Key><Value>${value}</Value></Tag>`,
+    '',
+  );
+
+  return `<Tagging><TagSet>${tags}</TagSet></Tagging>`;
+};
+```
+
+The tagging set could also be generated in the client side, but given how particular is the format, I prefer — if possible — to keep this logic within the lambda function. However, If the file (object) tags are dynamic and, for instance, should be defined by the user as part of the upload form, although technically possible, I'd rather generate the XML in the client side.
+
+Finally, the response is a JSON payload containing the URL to post the file, and the file tags — when provided.
+
+```json
+// JSON Upload Policy example
+
+```
+
+A web application using this lambda function will fetch the policy, and POST the form containing the file and policy fields to the given URL. Find below a test using the lambda function to upload a file.
+
+```typescript
+test('upload file', async () => {
+  // request the upload URL and POST policy
+  const { data, status } = await axios.post(
+    'https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/createPostUploadUrl',
+    {
+      filename: 'my_rock_song.m4a',
+      tags: {
+        genre: 'rock',
+        year: '1994',
+      },
+    },
+  );
+
+  expect(status).toEqual(200);
+
+  // the form fields contains the policy fields and the file to upload.
+  const fields = {
+    ...data.fields,
+    file: fs.createReadStream('./file_to_upload.m4a'),
+  };
+
+  // use the npm package `form-data` to emulate the FormData Web API
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    form.append(key, value);
+  }
+
+  const { status: uploadStatusCode } = await axios.post(data.url, form, {
+    // AWS requires the Content-Length header
+    headers: {
+      ...form.getHeaders(),
+      'Content-Length': await getContentLength(form),
+    },
+  });
+  expect(uploadStatusCode).toEqual(204);
+});
+
+```
+
+When using the lambda's response in a real web application, the POST policy fields (see `data.fields` above) could be set as hidden fields of the form.
 
 
 ### Disadvatages
 
 - The client application must send two requests: a request to get the pre-signed data (JSON object), and a request to POST the file to S3.
-- It might be unfair to call the process complicated, but it
--
+- It might be unfair to call the process complicated, but it's definitely not as simple as some of the previous options.
+- When it comes to `tagging` the file, the tags should be provided as an XML. If the file tags aren't defined by the user (dynamic), this logic could live inside the lambda function. Otherwise, the expected tagging set format should be generated in the client side. There already a few abstraction leaks in this option, but, in my opinion, this one is particularly cumbersome.
 
 ### Advantages
 
-- Same advantages that pre-signed URLs
+- Same advantages that pre-signed URLs.
 - It's the recommended method to upload a file from a web-form.
-- It's probably the most flexible approach. Conditions can be specified on the pre-signed filds to make sure the upload file contains exactly what's expected.
+- It's probably the most flexible approach. Metadata, and tags could be provided, while conditions to restrict the POST request can be defined. As a result, every object written to the S3 bucket should contain exactly what is expected.
 
 
 ### References
