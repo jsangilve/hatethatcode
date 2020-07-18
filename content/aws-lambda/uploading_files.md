@@ -1,22 +1,23 @@
 Title: Uploading files with lambda integration and AWS
-Date: 2020-MM-DD
+Date: 2020-07-18
 Tags: aws, lambda, typescript, s3
 Category: lambda
 Authors: José San Gil
 
-TLDR
-
-Consider the average size of the file to upload.
-If the file size is within the 10MB limit you can upload the files with one request.
-If the file size is over th 10MB limit, you need two requests ( pre-signed url or pre-signed HTTP POST)
 
 Uploading a file is one of those common features (use cases) that almost every web applications needs. From adding a profile picture to importing a CSV is a fairly simple task to do in almost every web framework or library.
 
 I'm working on a side project where uploading and processing files is an essential use case. I decided to go for a serverless approach, and assumed it would be a simple task to upload a file to S3 from the browser. In fact, it isn't complicated, but I actually found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using and AWS lambdas, but there are a few subtleties that you might want to consider first.
 
+### TLDR 🙈
+
+- Consider the average size of the file to upload.
+- If the file size is within the 10MB limit, you can upload the files with one request.
+- If the file size is over the 10MB limit, you need two requests ( pre-signed url or pre-signed HTTP POST)
+
 I tried to compile most of my learning in the following blog post:
 
-## First option: Amplify JS
+## ① First option: Amplify JS
 
 If you're uploading the file from the browser — and particularly if your application requires integration with other AWS service — Amplify is probably a good option.
 Some setup using amplify-cli is required, but it's rather simple — unless you decide or need to setup resouces manually.
@@ -80,8 +81,7 @@ const uploadFile = async (filename: string, content: string) => {
 };
 ```
 
-
-### Disadvantages: 
+### ⚠️ Disadvantages
 
 - If you do not need any other Amplify's library (API, AI, etc) besides storage, _it might not be the right tool for the job_. You'll be adding circa +100 KB to your bundle to upload a file (overkill). Also, you're forced to add the `Auth` library (Amazon Cognito).
 - The setup is simple and convenient, but restrictive. Amplify uploads your files to either `private/COGNITO-USER-ID`, `protected/COGNITO-USER_ID` or `public` path depending on the specified `level` (see the snippet above). This bucket structure certainly makes sense and suffices common use cases, but — as everything in software — might not exactly match your requirements.
@@ -94,7 +94,7 @@ const uploadFile = async (filename: string, content: string) => {
 - The library automatically creates a multi-part upload i.e., apps can upload files up to 5 TB — that'd probably be a bad idea, but still possible.
 
 
-## Second option: upload the file using the API Gateway and a lambda function
+## ② Second option: upload the file using the API Gateway and a lambda function
 
 In my opinion, this is the simplest and most flexible way to upload and process — or trigger the procesing — files using AWS... as long as your application doesn't require to upload files over 10 MB. 
 
@@ -160,10 +160,14 @@ This lambda function parses the APIGatewayProxy event (see the `parseFormData` f
 You can call the function using the following `curl` request:
 
 ```bash
-curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=@FILE_TO_UPLOAD.mp3' -F 'filename=my_custom_filename.m4a' https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/upload
+curl -vs --progress-bar -X POST \
+  -H "Content-Type: multipart/form-data" \
+  -F 'file=@FILE_TO_UPLOAD.mp3' \
+  -F 'filename=my_custom_filename.m4a' \
+  --url https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/upload
 ```
 
-### Disadvantages
+### ⚠️ Disadvantages
 
 - API Gateway limits the payload size to [10 MB](https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html1). If you try to upload a file that exceeds the 10 MB limit, the API Gateway return HTTP 413: `HTTP content length exceeded 10485760 bytes`. 
 
@@ -173,13 +177,13 @@ curl -vs --progress-bar -X POST -H "Content-Type: multipart/form-data" -F 'file=
 - A synchronous flow for uploading and processing files. When the file size doesn't surpass the API Gateway's limit and the required processing can be done quickly, this model is simple to use and integrate with any web application. 
 - Authorization can be added using the API Gateway's authorizers.
 
-## Third option: upload the file using a pre-signed URL
+## ③ Third option: upload the file using a pre-signed URL
 
 This option employs an API Gateway's endpoint integrated with a lambda function. The application client requests a pre-signed URL from the endpoint, passing some parameters as metadata and tags (there are some caveats with this one), and uploads the file sending an `HTTP PUT` request to the pre-signed URL. 
 
 Let's see an example on how to this with the `serverless` framework:
 
-```
+```yaml
 # serverless.yaml
 Functions:
   # ... other functions
@@ -221,13 +225,14 @@ export const createUploadUrl: APIGatewayProxyHandler = async (event) => {
 The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as `Tagging`. This is explicitly stated in the javascript SDK's documentation [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` define that function parameters as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>`), so you might easily miss this detail. 
 
 - _Note 1_: Even when the documentation lists `Expires` among the parameters that will be ignored, it works. The generated URL (signature), expires after the given number of seconds (90 seconds in the example above).
-
 - _Note 2_: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
 
 Therefore, if your application doesn't require Tagging — or any other unsupported parameter like SSECustomerKey, ACL, or ContentLength —  using a pre-signed url is a good option. Let's see how it looks:
 
 ```bash
-curl -vs --progress-bar -X POST -F 'filename=fileWithPresignedURL' https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/createUploadUrl
+curl -vs --progress-bar -X POST \
+  -F 'filename=fileWithPresignedURL' \
+  --url https://your-api-id.execute-api.us-east-1.amazonaws.com/dev/createUploadUrl
 ```
 
 The request above will return a JSON with the following format:
@@ -258,7 +263,7 @@ You might have noticed how the lambda function is also passing the tags to the `
 - _Note_: if you wonder whether to use metadata or tags, there is an [interesting answer](https://stackoverflow.com/questions/42126348/difference-between-object-tags-and-object-metadata) in SO on the topic.
 
 
-### Disadvantages
+### ⚠️ Disadvantages
 
 - The application flow might vary, but uploading a file always requires two requests: one to get the pre-signed url, another to upload the file.
 - Tagging doesn't work out of the box. Even when the pre-signed URL is created passing the tags, the uploaded file doesn't get tagged. This [issue](https://github.com/aws/aws-sdk-js/issues/1313) has been reported and, according to the [SDK documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property), it doesn't work because some parameters — like `Tagging` — aren't supported and must be provided as headers.
@@ -270,7 +275,7 @@ You might have noticed how the lambda function is also passing the tags to the `
 - When uploading big files, the server load — or serveless load 😅 — gets transferred to S3. In a traditional web server approach, your server wouldn't be busy handling the files. Meanwhile, in a serverless approach, your lambda functions wouldn't need to be executed to handle the file upload, which, theoretically, translates into a smaller bill — [S3 doesn't charge for data transfer IN](https://aws.amazon.com/s3/pricing/).
 - It can be [combined](https://github.com/prestonlimlianjie/aws-s3-multipart-presigned-upload) with multipart uploads. The maximum file (object) size can be up to 5 TB.
 
-## Fourth option: upload the file using pre-signed POST
+## ④ Fourth option: upload the file using pre-signed POST
 
 This option is very similar to a pre-signed URLs, but allows the client application to upload a file using an HTTP POST request. From the S3 documentation:
 
@@ -328,14 +333,11 @@ export const createPostUploadUrl: APIGatewayProxyHandler = async (event) => {
 
 ```
 
-We use the SDK's function `createPresignedPost`. 
+We use the SDK's function `createPresignedPost`. It requires fields and conditions that could be part of the request. The `Conditions` key defines an array of policy conditions that should be met to upload the file. You can find a specific section about conditions in the [AWS S3 documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-ConditionMatching).
 
-The API requires to define fields and conditions that could be part of the request. The `Conditions` key defines an array of policy conditions that should be met to upload the file. You can find a specific section about conditions in the [AWS S3 documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html#sigv4-ConditionMatching).
-
-In the example above, when tags are provided, the resulting policy expects a `tagging` field with any value. However, the S3's `PostObject` operation still requires this `tagging` field to contain the set of tags in the following format:
+In the example above, when tags are provided, the resulting policy expects a `tagging` field with any value (an empty string `''` means any value). However, the S3's `PostObject` operation still requires this `tagging` field to contain the set of tags in the following format:
 
 ```xml
-# xml format for the tagging set
 <Tagging>
   <TagSet>
     <Tag>
@@ -368,7 +370,21 @@ The tagging set could also be generated in the client side, but given how partic
 Finally, the response is a JSON payload containing the URL to post the file, and the file tags — when provided.
 
 ```json
-// JSON Upload Policy example
+{
+  "url": "https://s3.amazonaws.com/your-bucket",
+  "fields": {
+    "key": "file_to_be_uploaded.ext",
+    "bucket": "serverless-example-bucket",
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Credential": "ASIAYJBFLSRZPBUTNKWB/20200718/us-east-1/s3/aws4_request",
+    "X-Amz-Date": "20200718T151836Z",
+    "X-Amz-Security-Token": "LONG_SECURITY_TOKEN",
+    "Policy": "ENCODED_POLICY",
+    "X-Amz-Signature": "SIGNATURE_STRING",
+    "tagging": "<Tagging><TagSet><Tag><Key>tagX</Key><Value>valueTagX</Value></Tag></TagSet></Tagging>"
+  }
+}
+
 
 ```
 
@@ -417,7 +433,7 @@ test('upload file', async () => {
 When using the lambda's response in a real web application, the POST policy fields (see `data.fields` above) could be set as hidden fields of the form.
 
 
-### Disadvatages
+### ⚠️ Disadvantages
 
 - The client application must send two requests: a request to get the pre-signed data (JSON object), and a request to POST the file to S3.
 - It might be unfair to call the process complicated, but it's definitely not as simple as some of the previous options.
@@ -430,6 +446,19 @@ When using the lambda's response in a real web application, the POST policy fiel
 - It's probably the most flexible approach. Metadata, and tags could be provided, while conditions to restrict the POST request can be defined. As a result, every object written to the S3 bucket should contain exactly what is expected.
 
 
+## Conclusion
+
+There are different alternatives for
+
+You can find the code for the lambda functions in the following repository: https://github.com/jsangilve/serverless-example.
+ 
 ### References
 
-- CSS Tricks example
+- [https://blog.webiny.com/upload-files-to-aws-s3-using-pre-signed-post-data-and-a-lambda-function-7a9fb06d56c1](https://blog.webiny.com/upload-files-to-aws-s3-using-pre-signed-post-data-and-a-lambda-function-7a9fb06d56c1)
+- [https://blog.bigbinary.com/2018/09/04/uploading-files-directly-to-s3-using-pre-signed-post-request.html](https://blog.bigbinary.com/2018/09/04/uploading-files-directly-to-s3-using-pre-signed-post-request.html)
+- [https://www.serverless.com/blog/s3-one-time-signed-url](https://www.serverless.com/blog/s3-one-time-signed-url)
+- [https://medium.marqeta.com/pre-signing-aws-s3-urls-136f203a75cd?gi=cf38bc74bdef](https://medium.marqeta.com/pre-signing-aws-s3-urls-136f203a75cd?gi=cf38bc74bdef)
+- [https://medium.com/swlh/upload-binary-files-to-s3-using-aws-api-gateway-with-aws-lambda-2b4ba8c70b8e](https://medium.com/swlh/upload-binary-files-to-s3-using-aws-api-gateway-with-aws-lambda-2b4ba8c70b8e)
+- [https://medium.com/@aidan.hallett/securing-aws-s3-uploads-using-presigned-urls-aa821c13ae8d](https://medium.com/@aidan.hallett/securing-aws-s3-uploads-using-presigned-urls-aa821c13ae8d)
+- [https://sookocheff.com/post/api/uploading-large-payloads-through-api-gateway/](https://sookocheff.com/post/api/uploading-large-payloads-through-api-gateway/)
+- [https://css-tricks.com/building-your-first-serverless-service-with-aws-lambda-functions/](https://css-tricks.com/building-your-first-serverless-service-with-aws-lambda-functions/)
