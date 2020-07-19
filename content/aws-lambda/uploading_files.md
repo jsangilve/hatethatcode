@@ -1,13 +1,12 @@
 Title: Uploading files with lambda integration and AWS
-Date: 2020-07-18
+Date: 2020-07-19
 Tags: aws, lambda, typescript, s3
 Category: lambda
 Authors: José San Gil
 
+Uploading a file is one of those common use cases that almost every web application needs. Regardless of whether you're adding a profile picture, uploading a document, or importing a CSV, it is a fairly simple task in almost every language, framework, or library.
 
-Uploading a file is one of those common features (use cases) that almost every web applications needs. From adding a profile picture to importing a CSV is a fairly simple task to do in almost every web framework or library.
-
-I'm working on a side project where uploading and processing files is an essential use case. I decided to go for a serverless approach, and assumed it would be a simple task to upload a file to S3 from the browser. In fact, it isn't complicated, but I actually found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using and AWS lambdas, but there are a few subtleties that you might want to consider first.
+I'm working on a side project where uploading and processing files is a fundamental use case. I went for a serverless approach and assumed that uploading a file to S3 from the browser would be a simple task. In fact, it isn't complicated, but I found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using and AWS lambdas, but there are a few subtleties that you might want to consider first. I tried to compile some of my learnings in the following blog post:
 
 ### TLDR 🙈
 
@@ -15,7 +14,6 @@ I'm working on a side project where uploading and processing files is an essenti
 - If the file size is within the 10MB limit, you can upload the files with one request.
 - If the file size is over the 10MB limit, you need two requests ( pre-signed url or pre-signed HTTP POST)
 
-I tried to compile most of my learning in the following blog post:
 
 ## ① First option: Amplify JS
 
@@ -24,7 +22,7 @@ Some setup using amplify-cli is required, but it's rather simple — unless you 
 
 You will need to install the [amplify-cli](https://docs.amplify.aws/cli/start/install#pre-requisites-for-installation), add the `storage` library and put the file in S3.
 
-```
+```typescript
 // App.ts
 import AWSStorage from '@aws-amplify/storage';
 
@@ -73,7 +71,6 @@ const uploadFile = async (filename: string, content: string) => {
     // metadata seems to accept an object as long as the values are string
     metadata: {
       language: 'en-US',
-      metatagNumber: ,
     },
     // with `tagging` the parameters must be URL encoded
     tagging: new URLSearchParams({ filename }).toString(),
@@ -86,22 +83,30 @@ const uploadFile = async (filename: string, content: string) => {
 - If you do not need any other Amplify's library (API, AI, etc) besides storage, _it might not be the right tool for the job_. You'll be adding circa +100 KB to your bundle to upload a file (overkill). Also, you're forced to add the `Auth` library (Amazon Cognito).
 - The setup is simple and convenient, but restrictive. Amplify uploads your files to either `private/COGNITO-USER-ID`, `protected/COGNITO-USER_ID` or `public` path depending on the specified `level` (see the snippet above). This bucket structure certainly makes sense and suffices common use cases, but — as everything in software — might not exactly match your requirements.
 - If your app doesn't use AWS Cognito for authentication, some manual setup is required (IAM policies).
-- The extra options (metadata, tagging, etc) aren't currently documented (as of June 2020). I doubt they're considered private API but 🤷🏽‍.
+- The extra options (metadata, tagging, etc) aren't currently documented (as of July 2020). I doubt they're considered private API but 🤷🏽‍.
 
 ### Advantages:
 
-- Easy to setup.
-- The library automatically creates a multi-part upload i.e., apps can upload files up to 5 TB — that'd probably be a bad idea, but still possible.
+- Relatively easy to setup.
+- The library automatically creates a multi-part upload i.e., apps can upload files up to 5 TB — which is probably a bad idea, but still possible.
 
 
 ## ② Second option: upload the file using the API Gateway and a lambda function
 
 In my opinion, this is the simplest and most flexible way to upload and process — or trigger the procesing — files using AWS... as long as your application doesn't require to upload files over 10 MB. 
 
-The web application would `POST` the file to a given HTTP endpoint as binary data. You can find different example on how to do it out there, but please find below a simple setup using the [Serverless framework](https://www.serverless.com/):
+The web application would `POST` the file to a given HTTP endpoint as binary data. You can find different examples on how to do it out there, but please find below a simple setup using the [Serverless framework](https://www.serverless.com/):
 
 ```yaml
 # serverless.yaml
+provider:
+  name: aws
+  runtime: nodejs12.x
+  apiGateway:
+    # accepted binary type for file uploads
+    binaryMediaTypes:
+      - 'multipart/form-data'
+
 functions:
   # option 1: sync upload
   uploadFile:
@@ -111,6 +116,35 @@ functions:
           method: post
           path: upload
           cors: true
+
+resources:
+  Resources:
+    MyServerlessExampleBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: serverless-example-bucket
+
+    # define a policy for an existing role
+    UploadFilePolicy:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyName: UploadObjects
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: LambdaPutObjects
+              Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectTagging
+              Resource: 
+                Fn::Join:
+                  - ""
+                  - - "arn:aws:s3:::"
+                    - Ref: MyServerlessExampleBucket
+                    - "/*"
+        Roles:
+          - serverless-example-dev-us-east-1-role 
 ```
 
 This serverless configuration creates a lambda function integrated with the API Gateway using the [lambda proxy integration](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html). It adds a policy attaching the S3 permissions required to upload a file. Please note that `s3:PutObject` and `s3:PutObjectTagging` are required to upload the file and put tags, respectively.
@@ -119,7 +153,7 @@ The defined endpoint (`POST /upload`) handles the request and transforms the pay
 
 We need to configure the API Gateway to accept binary media types i.e., the binary content types that should be accepted by the API.
 
-The API Gateway — through the lambda proxy integration — transforms the payload into a `base64` string, when the `Content-Type` header matches the API's binary media types. Otherwise, the proxy integration pass down the payload as string.
+The API Gateway — through the lambda proxy integration — transforms the payload into a `base64` string when the `Content-Type` header matches the API's binary media types. Otherwise, the proxy integration pass down the payload as string.
 
 For example, let's use `multipart/form-data`. The API's binary media types has been configured to accept `multipart/form-data` (see `serverless.yaml` above).
 
@@ -148,14 +182,15 @@ const uploadFile: APIGatewayProxyHandler = async (event) => {
   } catch (_error) {
     // this is not ideal error handling, but good enough for the purpose of this example
     return {
-      statusCode: 409, body: JSON.stringify({ description: 'something went wrong', result: 'error' })
+      statusCode: 409, 
+      body: JSON.stringify({ description: 'something went wrong', result: 'error' })
     }
   }
 };
 
 ```
 
-This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the repository or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file and extract other fields from the form data. Then, uploads the file to S3, includes the tags, and a customizes the filename when provided.
+This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the repository or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file, and extract other fields from the form data. Then, uploads the file to S3, includes the tags, and customizes the filename when provided.
 
 You can call the function using the following `curl` request:
 
@@ -298,7 +333,7 @@ Functions:
           cors: true
 ```
 
-Nothing new here. The function definition looks quite similar to the pre-signed URL option. The next step is to create the lambda function: 
+Nothing new here. The function definition is quite similar to the pre-signed URL option. The next step is to create the lambda function: 
 
 ```typescript
 // createPostUploadURL.ts
@@ -365,7 +400,7 @@ export const buildXMLTagSet = (tagset: Record<string, string>): string => {
 };
 ```
 
-The tagging set could also be generated in the client side, but given how particular is the format, I prefer — if possible — to keep this logic within the lambda function. However, If the file (object) tags are dynamic and, for instance, should be defined by the user as part of the upload form, although technically possible, I'd rather generate the XML in the client side.
+The tagging set could also be generated on the client-side, but given how particular is the format, I prefer — if possible — to keep this logic within the lambda function. However, if the file (object) tags are dynamic and, for instance, should be defined by the user as part of the upload form, although technically possible, I'd suggest generating the XML on the client-side.
 
 Finally, the response is a JSON payload containing the URL to post the file, and the file tags — when provided.
 
@@ -448,7 +483,11 @@ When using the lambda's response in a real web application, the POST policy fiel
 
 ## Conclusion
 
-There are different alternatives for
+As usual, there isn't a silver bullet. The average file size should be the first element to take into consideration when choosing between the four options. If you expect to upload files over 10MB, option ② can be discarded. On the other hand, you have option ①. The Amplify framework simplifies things like uploading a file — it eliminates the file size problem using multipart uploads — or implementing authentication and authorization with Cognito. Unfortunately, some things aren't so simple or well documented (tagging), and your application could get tightly coupled to AWS — which might not necessarily be a bad thing. 
+
+Ultimately, you have pre-signed URLs (option ③) and pre-signed POST  (option ④). Both require the client-side application to send two requests: one to get the signed URL, and another to upload the file to AWS S3. From the client-side point of view, it's simpler to deal with pre-signed URLs. The client-application fetches a URL, when required, and uploads the file — an HTTP PUT request with JS — to S3. Unfortunately, some parameters aren't supported (tagging), so workarounds must be employed. The pre-signed POST option is similar but expects a POST request. The payload retrieved from the first request can contain all the information required to upload the file (including tags), it's more flexible, but also more complex.
+
+Once again, no silver bullet, but a few _it depends_.
 
 You can find the code for the lambda functions in the following repository: https://github.com/jsangilve/serverless-example.
  
