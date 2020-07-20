@@ -1,4 +1,4 @@
-Title: Uploading files with lambda integration and AWS
+Title: Uploading files with serverless
 Date: 2020-07-19
 Tags: aws, lambda, typescript, s3
 Category: lambda
