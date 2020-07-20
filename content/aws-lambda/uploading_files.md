@@ -50,7 +50,7 @@ The documentation for the `put` method looks as follows:
 put(key: string, object: any, config?: any): Promise<Object>;
 ```
 
-At first glance, I found the options to be quite limited, but after having a look at code, I found the following configuration options:
+At first glance, I encountered the options a bit limited, but after having a look at code, I found the following configuration options:
 
 * `contentDispoistion`
 * `cache`
@@ -93,7 +93,7 @@ const uploadFile = async (filename: string, content: string) => {
 
 ## ② Second option: upload the file using the API Gateway and a lambda function
 
-In my opinion, this is the simplest and most flexible way to upload and process — or trigger the procesing — files using AWS... as long as your application doesn't require to upload files over 10 MB. 
+In my opinion, this is the simplest and most flexible way to upload and process files — or trigger the procesing — using AWS... as long as your application doesn't require to upload files over 10 MB. 
 
 The web application would `POST` the file to a given HTTP endpoint as binary data. You can find different examples on how to do it out there, but please find below a simple setup using the [Serverless framework](https://www.serverless.com/):
 
@@ -190,7 +190,7 @@ const uploadFile: APIGatewayProxyHandler = async (event) => {
 
 ```
 
-This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the repository or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file, and extract other fields from the form data. Then, uploads the file to S3, includes the tags, and customizes the filename when provided.
+This lambda function parses the APIGatewayProxy event (see the `parseFormData` function in the [repository](https://github.com/jsangilve/serverless-example) or alternatively check the npm package [lambda-multipart-parser](https://github.com/francismeynard/lambda-multipart-parser)), reads the file, and extract other fields from the form data. Then, uploads the file to S3, includes the tags, and customizes the filename when provided.
 
 You can call the function using the following `curl` request:
 
@@ -257,7 +257,7 @@ export const createUploadUrl: APIGatewayProxyHandler = async (event) => {
 
 ```
 
-The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as `Tagging`. This is explicitly stated in the javascript SDK's documentation [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` define that function parameters as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>`), so you might easily miss this detail. 
+The lambda function fetches the form fields, and uses the `filename` field to create a pre-signed URL. There is caveat though. The `getSignedUrlPromise` ignores some parameters as `Tagging`. This is explicitly stated in the javascript SDK's [documentation](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#getSignedUrl-property). Unfortunately, the typescript definitions for `getSignedUrlPromise` has the function parameters as `any` (`getSignedUrlPromise(operation: string, params: any): Promise<string>`), so you might easily miss this detail. 
 
 - _Note 1_: Even when the documentation lists `Expires` among the parameters that will be ignored, it works. The generated URL (signature), expires after the given number of seconds (90 seconds in the example above).
 - _Note 2_: I didn't confirm if this behaviour is consistent across S3 SDKs (python, java, go, etc).
@@ -314,9 +314,9 @@ You might have noticed how the lambda function is also passing the tags to the `
 
 This option is very similar to a pre-signed URLs, but allows the client application to upload a file using an HTTP POST request. From the S3 documentation:
 
- Amazon S3 supports HTTP POST requests so that users can upload content directly to Amazon S3. By using POST, end users can authenticate requests without having to pass data through a secure intermediary node that protects your credentials. Thus, HTTP POST has the potential to reduce latency. 
+> Amazon S3 supports HTTP POST requests so that users can upload content directly to Amazon S3. By using POST, end users can authenticate requests without having to pass data through a secure intermediary node that protects your credentials. Thus, HTTP POST has the potential to reduce latency. 
 
-I decided to try this option because of the issue with `Tagging` and pre-signed URLs. The pre-signed POST supports the parameters expected by the `PutObject` operation. Let's see how it works:
+I decided to try this option because of the issues with `Tagging` and pre-signed URLs. The pre-signed POST supports the parameters expected by the `PutObject` operation. Let's see how it works:
 
 First, let's add a new function to the `serverless.yaml` file:
 
@@ -400,7 +400,7 @@ export const buildXMLTagSet = (tagset: Record<string, string>): string => {
 };
 ```
 
-The tagging set could also be generated on the client-side, but given how particular is the format, I prefer — if possible — to keep this logic within the lambda function. However, if the file (object) tags are dynamic and, for instance, should be defined by the user as part of the upload form, although technically possible, I'd suggest generating the XML on the client-side.
+The tagging set could also be generated on the client-side, but given how particular is the format, I prefer — if possible — to keep this logic within the lambda function. However, if the file (object) tags are dynamic and, for instance, should be defined by the user as part of the upload form, I would suggest generating the XML on the client-side.
 
 Finally, the response is a JSON payload containing the URL to post the file, and the file tags — when provided.
 
@@ -487,7 +487,7 @@ As usual, there isn't a silver bullet. The average file size should be the first
 
 Ultimately, you have pre-signed URLs (option ③) and pre-signed POST  (option ④). Both require the client-side application to send two requests: one to get the signed URL, and another to upload the file to AWS S3. From the client-side point of view, it's simpler to deal with pre-signed URLs. The client-application fetches a URL, when required, and uploads the file — an HTTP PUT request with JS — to S3. Unfortunately, some parameters aren't supported (tagging), so workarounds must be employed. The pre-signed POST option is similar but expects a POST request. The payload retrieved from the first request can contain all the information required to upload the file (including tags), it's more flexible, but also more complex.
 
-Once again, no silver bullet, but a few _it depends_.
+Once again, no silver bullet, but a bunch of _it depends_.
 
 You can find the code for the lambda functions in the following repository: https://github.com/jsangilve/serverless-example.
  
