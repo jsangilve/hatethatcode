@@ -6,7 +6,7 @@ Authors: José San Gil
 
 Uploading a file is one of those common use cases that almost every web application needs. Regardless of whether you're adding a profile picture, uploading a document, or importing a CSV, it is a fairly simple task in almost every language, framework, or library.
 
-I'm working on a side project where uploading and processing files is a fundamental use case. I went for a serverless approach and assumed that uploading a file to S3 from the browser would be a simple task. In fact, it isn't complicated, but I found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using and AWS lambdas, but there are a few subtleties that you might want to consider first. I tried to compile some of my learnings in the following blog post:
+I'm working on a side project where uploading and processing files is a fundamental use case. I went for a serverless approach and assumed that uploading a file to S3 from the browser would be a simple task. In fact, it isn't complicated, but I found a couple of hiccups in the process. There are plenty of blog posts out there on how to upload a file to S3 using AWS lambdas, but there are a few subtleties that you might want to consider first. I tried to compile some of my learnings in the following blog post:
 
 ### TLDR 🙈
 
