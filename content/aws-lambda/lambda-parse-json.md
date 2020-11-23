@@ -60,21 +60,21 @@ describe('test different json parsing options', () => {
   // schema containing 3 string fields, but only two of them are required
   const jsonSchema = {
     properties: {
-    field1: { type: 'string' },
-    field2: { type: 'string' },
-    field3: { type: 'string' },
-    ,
+      field1: { type: 'string' },
+      field2: { type: 'string' },
+      field3: { type: 'string' },
+    },
     required: ['field1', 'field2'],
   };
   const ajv = new Ajv({ allErrors: true });
   const validate = ajv.compile(jsonSchema);
 
-test('check different json payloads', () => {
-  expect(validate({field1: 'foo', field2: 'bar'})).toTruthy()
-  expect(validate({field1: 'foo', field2: 'bar', field3: ''})).toBeTruthy()
-  expect(validate({field1: 1, field2: 'bar'})).toFalsy()
-  expect(validate({field1: 'foo', field3: 'blah'})).toFalsy()
-})
+  test('check different json payloads', () => {
+    expect(validate({field1: 'foo', field2: 'bar'})).toTruthy()
+    expect(validate({field1: 'foo', field2: 'bar', field3: ''})).toBeTruthy()
+    expect(validate({field1: 1, field2: 'bar'})).toFalsy()
+    expect(validate({field1: 'foo', field3: 'blah'})).toFalsy()
+  })
 }
 ```
 
@@ -88,7 +88,6 @@ class JSONParserError extends Error {
   constructor(public errors: {errorCode: string, message?: string}[]) {
     super();
   }
-
 }
 
 const imperativeParseJSON = <T = object>(data: object | string | null, validate: Ajv.ValidateFunction): T => {
