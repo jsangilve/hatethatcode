@@ -1,5 +1,5 @@
 Title: Functional and semi functional approaches to parse JSON with API Gateway lambda-proxy and lambda (custom) integrations.
-Date: 2020-11-19
+Date: 2020-11-23
 Tags: aws, lambda, typescript, api-gateway, serverless
 Category: lambda
 Authors: José San Gil
