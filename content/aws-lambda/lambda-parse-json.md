@@ -225,7 +225,6 @@ test('parse valid json with semiFunctionalParseJSON', () => {
 
 
 // lambda function
-```typescript
 import { isLeft } from 'fp-ts/lib/Either';
 
 const lambdaHandler: APIGatewayHandler = async event => {
