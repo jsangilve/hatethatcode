@@ -57,24 +57,24 @@ Let's start setting up AJV and define a basic JSON schema:
 
 ```typescript
 describe('test different json parsing options', () => {
-	// schema containing 3 string fields, but only two of them are required
+  // schema containing 3 string fields, but only two of them are required
   const jsonSchema = {
-  	properties: {
-  		field1: { type: 'string' },
-  		field2: { type: 'string' },
-  		field3: { type: 'string' },
-  	},
-  	required: ['field1', 'field2'],
+    properties: {
+    field1: { type: 'string' },
+    field2: { type: 'string' },
+    field3: { type: 'string' },
+    ,
+    required: ['field1', 'field2'],
   };
   const ajv = new Ajv({ allErrors: true });
   const validate = ajv.compile(jsonSchema);
 
-	test('check different json payloads', () => {
-		expect(validate({field1: 'foo', field2: 'bar'})).toTruthy()
-		expect(validate({field1: 'foo', field2: 'bar', field3: ''})).toBeTruthy()
-		expect(validate({field1: 1, field2: 'bar'})).toFalsy()
-		expect(validate({field1: 'foo', field3: 'blah'})).toFalsy()
-	})
+test('check different json payloads', () => {
+  expect(validate({field1: 'foo', field2: 'bar'})).toTruthy()
+  expect(validate({field1: 'foo', field2: 'bar', field3: ''})).toBeTruthy()
+  expect(validate({field1: 1, field2: 'bar'})).toFalsy()
+  expect(validate({field1: 'foo', field3: 'blah'})).toFalsy()
+})
 }
 ```
 
@@ -93,16 +93,16 @@ class JSONParserError extends Error {
 
 const imperativeParseJSON = <T = object>(data: object | string | null, validate: Ajv.ValidateFunction): T => {
   if (!data) {
-  	throw new JSONParserError({errorCode: 'null_json'});
+    throw new JSONParserError({errorCode: 'null_json'});
   }
   
   try {
-  	const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-  	if (validate(parsed)) {
-  		return parsed as T;
-  	}
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    if (validate(parsed)) {
+      return parsed as T;
+    }
   } catch (e) {
-  	throw new JSONParserError([{errorCode: 'malformed_json']);
+    throw new JSONParserError([{errorCode: 'malformed_json' }]);
   }
   
   throw new JSONParserError(validate.errors!.map(({ keyword, message }) => ({ errorCode: keyword, message })));
@@ -115,13 +115,13 @@ The `JSONParseError` is basically wrapping an array of the type `{ errorCode: st
 
 ```typescript
 describe('test different json parsing options', () => {
-	// ... setup
+  // ... setup
 
   test('parse valid json with imperativeParseJSON', () => {
-		const validData = {
-			field1: 'foo',
-			field2: 'bar',
-		}
+    const validData = {
+      field1: 'foo',
+      field2: 'bar',
+    }
     const resultObj = imperativeParseJSON(validData, compiledSchema);
     expect(resultObj).toEqual(validData);
     const resultString = imperativeParseJSON(JSON.stringify(validData), compiledSchema);
@@ -129,10 +129,11 @@ describe('test different json parsing options', () => {
   });
 
   test('parse invalid json with imperativeParseJSON', () => {
-		const invalidData = {
-			field2: 1,
-			field3: 'bar',
-		};
+    const invalidData = {
+      field2: 1,
+      field3: 'bar',
+    };
+
     try {
       const resultObj = imperativeParseJSON(invalidData, compiledSchema);
     } catch (e) {
@@ -153,19 +154,18 @@ From the lambda handler perspective, a `try/catch` is required to handle the exc
 
 ```typescript
 const lambdaHandler: APIGatewayHandler = async event => {
-	try {
-		const parsed = imperativeParseJSON(event.body)
-		// ... do something with the parsed payload
-	} catch (e) {
-		if (e instanceof JSONParseError) {
-			return {
-				statusCode: 400,
-				body: JSON.stringify({ errors: e.errors })
-			}
-		}
-		// catch any other expected exception that could be thrown within the code of the lambda function
-	}
-
+  try {
+    const parsed = imperativeParseJSON(event.body)
+    // ... do something with the parsed payload
+  } catch (e) {
+    if (e instanceof JSONParseError) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ errors: e.errors })
+      }
+    }
+    // catch any other expected exception that could be thrown within the code of the lambda function
+  }
 }
 ```
 
@@ -190,17 +190,17 @@ const semiFunctionalParseJSON = <T = object>(
   validate: Ajv.ValidateFunction,
 ): E.Either<JSONError[], T> => {
   if (!data) {
-  	E.left([NULL_JSON]);
+    E.left([NULL_JSON]);
   }
   
   try {
-  	const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-  	if (!validate(parsed)) {
-  		return E.left(validate.errors!.map(({ keyword, message }) => ({ errorCode: keyword, message })));
-  	}
-  	return E.right(parsed as T);
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    if (!validate(parsed)) {
+      return E.left(validate.errors!.map(({ keyword, message }) => ({ errorCode: keyword, message })));
+    }
+    return E.right(parsed as T);
   } catch (e) {
-  	return E.left([MALFORMED_JSON]);
+    return E.left([MALFORMED_JSON]);
   }
 };
 ```
@@ -213,13 +213,13 @@ describe('test different json parsing options', () => {
 
 test('parse valid json with semiFunctionalParseJSON', () => {
   const validData = {
-  	field1: 'foo',
-  	field2: 'bar',
+    field1: 'foo',
+    field2: 'bar',
   };
-	const resultObject = semiFunctionalParseJSON(validData, compiledSchema);
-	expect(whenRight(resultObject)).toEqual(validData);
-	const resultString = semiFunctionalParseJSON(JSON.stringify(validData), compiledSchema);
-	expect(whenRight(resultString)).toEqual(validData);
+  const resultObject = semiFunctionalParseJSON(validData, compiledSchema);
+  expect(whenRight(resultObject)).toEqual(validData);
+  const resultString = semiFunctionalParseJSON(JSON.stringify(validData), compiledSchema);
+  expect(whenRight(resultString)).toEqual(validData);
 })
 
 
@@ -228,15 +228,15 @@ test('parse valid json with semiFunctionalParseJSON', () => {
 import { isLeft } from 'fp-ts/lib/Either';
 
 const lambdaHandler: APIGatewayHandler = async event => {
-	const parsed = semiFunctionalParseJSON<MyExpectedType>(event.body)
-	if (isLeft(parsed)) {
-		return {
-			statusCode: 400,
-			body: JSON.stringify({ errors: parsed.left })
-		}
-	}
+  const parsed = semiFunctionalParseJSON<MyExpectedType>(event.body)
+  if (isLeft(parsed)) {
+  return {
+    statusCode: 400,
+    body: JSON.stringify({ errors: parsed.left })
+  }
+}
 
-	// processing payload with parsed.right (MyExpectedType)
+  // processing payload with parsed.right (MyExpectedType)
   // ...
 }
 ```
@@ -294,14 +294,13 @@ const validateSchema = <T>(validate: Ajv.ValidateFunction) => (
 const parseJSON = <T = object>(
   data: Json | null,
   schema: JsonSchemaKey | JsonSchemaValidator,
-): E.Either<JSONError[], T> => {
-  return pipe(
-		data, 
-		E.fromNullable([NULL_JSON]), 
-		E.chain(doParseJSON), 
-		E.chain(validateSchema<T>(schema))
-	);
-};
+): E.Either<JSONError[], T> =>
+  pipe(
+    data, 
+    E.fromNullable([NULL_JSON]), 
+    E.chain(doParseJSON), 
+    E.chain(validateSchema<T>(schema))
+  );
 ```
 
 
