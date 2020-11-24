@@ -133,8 +133,9 @@ describe('test different json parsing options', () => {
       field3: 'bar',
     };
 
+    expect.assertions(3);
     try {
-      const resultObj = imperativeParseJSON(invalidData, compiledSchema);
+      imperativeParseJSON(invalidData, compiledSchema);
     } catch (e) {
       const errors = e.errors;
       expect(errors.length > 0).toBeTruthy();
